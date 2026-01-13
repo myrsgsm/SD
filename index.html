@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Royal Sherwani - Delivery Terminal</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root {
+            --bg-cream: #F5F5DC;
+            --royal-maroon: #800000;
+            --gold: #D4AF37;
+            --white: #FFFFFF;
+            --charcoal: #333;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-cream); margin: 0; padding: 0; color: var(--charcoal); overflow-x: hidden; }
+
+        /* Header */
+        header { background: var(--royal-maroon); color: white; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; height: 60px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .header-left { font-weight: 900; font-size: 18px; letter-spacing: 1px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff4444; border: 2px solid white; display: inline-block; }
+        .status-dot.online { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
+
+        /* Login View */
+        #login-view { padding: 40px 20px; text-align: center; }
+        .login-box { max-width: 350px; margin: 50px auto; }
+        input { width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 12px; font-size: 16px; margin-bottom: 15px; outline: none; }
+        .btn-main { background: var(--royal-maroon); color: white; border: none; width: 100%; padding: 16px; border-radius: 12px; font-size: 18px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .btn-main:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Main Dashboard */
+        .view { display: none; padding: 15px; padding-bottom: 100px; animation: fadeIn 0.3s ease; }
+        .view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Search Section */
+        .search-container { display: flex; gap: 10px; margin-bottom: 20px; }
+        #search-input { flex: 1; border: 2px solid var(--royal-maroon); border-radius: 30px; padding: 12px 20px; font-weight: bold; margin-bottom: 0; }
+        .btn-go { background: var(--gold); color: black; border: none; width: 50px; border-radius: 50%; font-weight: 900; cursor: pointer; }
+
+        .scan-big-btn { 
+            width: 120px; height: 120px; background: white; border: 4px solid var(--royal-maroon); 
+            border-radius: 50%; margin: 20px auto; display: flex; align-items: center; justify-content: center;
+            font-size: 50px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); cursor: pointer;
+        }
+
+        /* Bill Details Card */
+        .bill-card { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; border-left: 6px solid var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: none; }
+        .b-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
+        .b-no { font-size: 24px; font-weight: 900; color: var(--royal-maroon); }
+        .b-cust { font-size: 14px; font-weight: bold; color: #555; }
+
+        /* Item List */
+        .item-row { 
+            display: flex; align-items: center; gap: 12px; padding: 12px; 
+            background: #f9f9f9; border-radius: 10px; margin-bottom: 8px; border: 1px solid #eee; 
+            transition: 0.2s;
+        }
+        .item-row.checked { background: #e8f5e9; border-color: #4caf50; }
+        .item-cb { width: 24px; height: 24px; accent-color: var(--royal-maroon); cursor: pointer; }
+        .item-info { flex: 1; }
+        .item-name { font-weight: 800; font-size: 15px; display: block; }
+        .item-meta { font-size: 11px; color: #666; font-weight: bold; }
+        .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #ddd; color: #333; }
+        .status-badge.DELIVERED { background: #4caf50; color: white; }
+
+        /* Payment Section */
+        .pay-section { background: white; padding: 20px; border-radius: 15px; margin-top: 20px; border: 1px solid #ddd; display: none; }
+        .pay-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+        .total-val { font-size: 18px; font-weight: 900; color: var(--royal-maroon); }
+        .pending-val { font-size: 22px; font-weight: 900; color: red; }
+        
+        .collect-box { margin-top: 15px; padding-top: 15px; border-top: 2px dashed #ccc; }
+        .collect-label { font-size: 12px; font-weight: bold; color: var(--royal-maroon); display: block; margin-bottom: 5px; }
+        #collect-input { font-size: 24px; font-weight: 900; color: #2e7d32; padding: 10px; text-align: center; border: 2px solid #2e7d32; }
+        #collect-input:disabled { background: #eee; color: #888; border-color: #ccc; }
+
+        /* Modals */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 5000; }
+        .modal-content { background: white; border-radius: 20px; width: 90%; max-width: 400px; padding: 25px; text-align: center; position: relative; }
+        
+        .conf-title { font-size: 20px; font-weight: 900; color: var(--royal-maroon); margin-bottom: 15px; }
+        .conf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; text-align: left; background: #f5f5f5; padding: 15px; border-radius: 10px; }
+        .conf-lbl { font-size: 11px; color: grey; font-weight: bold; }
+        .conf-val { font-size: 16px; font-weight: 900; color: #333; }
+
+        /* Scan Modal */
+        #qr-reader { width: 100%; }
+        
+        #console-log { display: none; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">ROYAL DELIVERY</div>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div id="status-dot" class="status-dot"></div>
+            <button onclick="logout()" style="background:var(--gold); border:none; padding:5px 10px; border-radius:4px; font-weight:bold; font-size:11px;">LOGOUT</button>
+        </div>
+    </header>
+
+    <div id="login-view" class="view active">
+        <div class="login-box">
+            <h2 style="color:var(--royal-maroon);">Staff Login</h2>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="pass" placeholder="Password">
+            <button class="btn-main" onclick="handleLogin()">OPEN TERMINAL</button>
+        </div>
+    </div>
+
+    <div id="dash-view" class="view">
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Bill / Pkt / Pcs ID">
+            <button class="btn-go" onclick="manualSearch()">GO</button>
+        </div>
+
+        <div id="scan-trigger-area">
+            <div class="scan-big-btn" onclick="startScanner()">📷</div>
+            <p style="text-align:center; font-weight:900; color:#aaa; margin-top:10px;">TAP TO SCAN</p>
+        </div>
+
+        <div id="bill-area" class="bill-card">
+            <div class="b-header">
+                <div>
+                    <div class="b-no" id="d-bill-no">#000</div>
+                    <div class="b-cust" id="d-cust-name">Customer Name</div>
+                </div>
+                <button onclick="resetSearch()" style="background:#eee; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">RESET ✕</button>
+            </div>
+
+            <div id="items-list-container">
+                </div>
+
+            <div class="pay-section" id="pay-section">
+                <div class="pay-row"><span>Total Bill:</span> <span class="total-val" id="d-total">₹0</span></div>
+                <div class="pay-row"><span>Previously Paid:</span> <span style="font-weight:bold;" id="d-paid">₹0</span></div>
+                <div class="pay-row" style="border-top:1px dashed #ccc; padding-top:10px;">
+                    <span>PENDING BALANCE:</span> <span class="pending-val" id="d-pending">₹0</span>
+                </div>
+
+                <div class="collect-box">
+                    <span class="collect-label">COLLECTING NOW (₹)</span>
+                    <input type="number" id="collect-input" value="0" oninput="validateAmount()">
+                    <div style="display:flex; justify-content:center; gap:10px; margin-top:10px;">
+                        <label><input type="radio" name="pmode" value="Cash" checked> Cash</label>
+                        <label><input type="radio" name="pmode" value="UPI"> UPI</label>
+                    </div>
+                </div>
+
+                <button class="btn-main" style="margin-top:20px; width:100%; background:#2e7d32;" onclick="showConfirmation()">PROCEED DELIVERY ✅</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <div class="conf-title">CONFIRM DELIVERY</div>
+            
+            <div class="conf-grid">
+                <div>
+                    <span class="conf-lbl">COLLECTING</span><br>
+                    <span class="conf-val" id="conf-amt" style="color:green;">₹0</span>
+                </div>
+                <div>
+                    <span class="conf-lbl">DELIVERING</span><br>
+                    <span class="conf-val" id="conf-items">0 Pcs</span>
+                </div>
+                <div>
+                    <span class="conf-lbl">PAY MODE</span><br>
+                    <span class="conf-val" id="conf-mode">Cash</span>
+                </div>
+                <div>
+                    <span class="conf-lbl">RETURNING</span><br>
+                    <span class="conf-val" id="conf-return" style="color:orange;">0 Pcs</span>
+                </div>
+            </div>
+
+            <p style="font-size:12px; color:grey; margin-bottom:20px;">
+                ⚠️ Only items from BROKEN packets will be unlinked. Other items remain packed.
+            </p>
+
+            <button class="btn-main" onclick="executeDelivery()">CONFIRM & DELIVER</button>
+            <button onclick="document.getElementById('confirm-modal').style.display='none'" style="width:100%; margin-top:15px; border:none; background:none; color:red; font-weight:bold;">Cancel</button>
+        </div>
+    </div>
+
+    <div id="qr-modal" class="modal">
+        <div class="modal-content" style="padding:10px;">
+            <div id="qr-reader"></div>
+            <button onclick="stopScanner()" style="width:100%; margin-top:10px; padding:10px; border:none; background:#eee; font-weight:bold;">CLOSE CAMERA</button>
+        </div>
+    </div>
+
+    <script>
+        let supabaseClient, html5QrCode;
+        let currentBill = null;
+        let currentInventory = [];
+
+        // --- INIT ---
+        window.onload = function() {
+            const url = localStorage.getItem('rs-url');
+            const key = localStorage.getItem('rs-key');
+            if(url && key) {
+                supabaseClient = supabase.createClient(url, key);
+                checkSession();
+            }
+        };
+
+        async function checkSession() {
+            const { data } = await supabaseClient.auth.getSession();
+            if(data.session) {
+                document.getElementById('login-view').classList.remove('active');
+                document.getElementById('dash-view').classList.add('active');
+                document.getElementById('status-dot').classList.add('online');
+            }
+        }
+
+        async function handleLogin() {
+            const e = document.getElementById('email').value, p = document.getElementById('pass').value;
+            const { error } = await supabaseClient.auth.signInWithPassword({ email: e, password: p });
+            if(!error) checkSession(); else alert(error.message);
+        }
+
+        async function logout() { await supabaseClient.auth.signOut(); location.reload(); }
+
+        // --- SEARCH LOGIC ---
+        function manualSearch() {
+            const q = document.getElementById('search-input').value.trim();
+            if(!q) return;
+            processQuery(q);
+        }
+
+        async function processQuery(q) {
+            let billNo = null;
+            if(q.length <= 3) {
+                billNo = q;
+            } else if (q.length === 4) {
+                const { data } = await supabaseClient.from('bills').select('bill_number').contains('pkt_ids', [q]).limit(1);
+                if(data && data.length > 0) billNo = data[0].bill_number;
+            } else {
+                const { data } = await supabaseClient.from('inventory').select('bill_number').eq('pcs_id', q).limit(1);
+                if(data && data.length > 0) billNo = data[0].bill_number;
+            }
+
+            if(billNo) fetchBillDetails(billNo);
+            else alert("No Bill Found for this ID!");
+        }
+
+        // --- FETCH & RENDER ---
+        async function fetchBillDetails(bNo) {
+            document.getElementById('scan-trigger-area').style.display = 'none';
+            document.getElementById('bill-area').style.display = 'block';
+            document.getElementById('items-list-container').innerHTML = 'Loading...';
+
+            const { data: bill } = await supabaseClient.from('bills').select('*').eq('bill_number', bNo).single();
+            currentBill = bill;
+
+            const { data: items } = await supabaseClient.from('inventory').select('*').eq('bill_number', bNo);
+            currentInventory = items;
+
+            document.getElementById('d-bill-no').innerText = `#${bill.bill_number}`;
+            document.getElementById('d-cust-name').innerText = bill.customer_name;
+
+            const list = document.getElementById('items-list-container');
+            list.innerHTML = '';
+
+            const invMap = {};
+            currentInventory.forEach(i => {
+                if(!invMap[i.bill_item_name]) invMap[i.bill_item_name] = [];
+                invMap[i.bill_item_name].push(i);
+            });
+
+            (bill.items_json || []).forEach((item, idx) => {
+                let status = "PENDING";
+                let pcsId = "Not Linked";
+                let pktId = "";
+                let rawPktId = ""; // RAW ID stored for logic
+                let isDelivered = false;
+                let invItem = null;
+
+                if (invMap[item.name] && invMap[item.name].length > 0) {
+                    invItem = invMap[item.name].shift(); 
+                    status = invItem.status;
+                    pcsId = invItem.pcs_id;
+                    if(invItem.pkt_ids && invItem.pkt_ids.length > 0) {
+                        rawPktId = invItem.pkt_ids[0]; // Store raw string '1001'
+                        pktId = `PKT: ${rawPktId}`;
+                    }
+                    if(status === 'DELIVERED') isDelivered = true;
+                }
+
+                let checkAttr = '';
+                let rowClass = '';
+                
+                if (isDelivered) {
+                    checkAttr = 'checked disabled';
+                    rowClass = 'checked';
+                } else if (invItem) {
+                    checkAttr = 'checked'; 
+                } else {
+                    checkAttr = 'disabled';
+                }
+
+                // CRITICAL: Storing data-rawpkt for smart logic
+                list.innerHTML += `
+                <div class="item-row ${rowClass}" id="row-${idx}">
+                    <input type="checkbox" class="item-cb" id="cb-${idx}" ${checkAttr} 
+                           onchange="toggleRow('${idx}')" 
+                           data-pcsid="${pcsId}" 
+                           data-rawpkt="${rawPktId}" 
+                           data-status="${status}">
+                    <div class="item-info">
+                        <span class="item-name">${item.name}</span>
+                        <div class="item-meta">
+                            ID: ${pcsId} <span style="color:var(--royal-maroon); margin-left:5px;">${pktId}</span>
+                        </div>
+                    </div>
+                    <span class="status-badge ${status}">${status}</span>
+                </div>`;
+            });
+
+            const pending = bill.total_amount - bill.received_amount;
+            document.getElementById('d-total').innerText = `₹${bill.total_amount}`;
+            document.getElementById('d-paid').innerText = `₹${bill.received_amount}`;
+            document.getElementById('d-pending').innerText = `₹${pending}`;
+
+            const colInput = document.getElementById('collect-input');
+            if(pending <= 0) {
+                colInput.value = 0;
+                colInput.disabled = true; 
+                document.getElementById('d-pending').innerHTML = `<span style="color:green">FULL PAID</span>`;
+            } else {
+                colInput.value = pending;
+                colInput.disabled = false;
+            }
+
+            document.getElementById('pay-section').style.display = 'block';
+        }
+
+        function toggleRow(idx) {
+            const cb = document.getElementById(`cb-${idx}`);
+            const row = document.getElementById(`row-${idx}`);
+            if(cb.checked) row.classList.add('checked');
+            else row.classList.remove('checked');
+        }
+
+        function resetSearch() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('bill-area').style.display = 'none';
+            document.getElementById('scan-trigger-area').style.display = 'block';
+        }
+
+        function showConfirmation() {
+            const checkboxes = document.querySelectorAll('.item-cb:not(:disabled)');
+            let toDeliverCount = 0;
+            let toReturnCount = 0;
+
+            checkboxes.forEach(cb => {
+                if(cb.checked) toDeliverCount++;
+                else toReturnCount++;
+            });
+
+            if(toDeliverCount === 0 && toReturnCount === 0) return alert("Nothing new to update.");
+
+            const amt = document.getElementById('collect-input').value;
+            const mode = document.querySelector('input[name="pmode"]:checked').value;
+
+            document.getElementById('conf-amt').innerText = `₹${amt}`;
+            document.getElementById('conf-items').innerText = `${toDeliverCount} Pcs`;
+            document.getElementById('conf-mode').innerText = mode;
+            document.getElementById('conf-return').innerText = `${toReturnCount} Pcs`;
+
+            document.getElementById('confirm-modal').style.display = 'flex';
+        }
+
+        // --- SMART LOGIC CORE ---
+        async function executeDelivery() {
+            const btn = document.querySelector('#confirm-modal .btn-main');
+            btn.disabled = true; btn.innerText = "Processing...";
+
+            const amount = Number(document.getElementById('collect-input').value);
+            const payMode = document.querySelector('input[name="pmode"]:checked').value;
+            const checkboxes = document.querySelectorAll('.item-cb:not(:disabled)');
+
+            const deliverIds = [];
+            const returnIds = [];
+            const openedPackets = new Set(); // Store Pkt IDs that are being delivered (opened)
+
+            // Step 1: Identify Delivered Items and their Packets
+            checkboxes.forEach(cb => {
+                if(cb.checked) {
+                    deliverIds.push(cb.dataset.pcsid);
+                    const pkt = cb.dataset.rawpkt;
+                    if(pkt) openedPackets.add(pkt);
+                }
+            });
+
+            // Step 2: Identify Unchecked Items. Only return if their packet matches an opened packet
+            checkboxes.forEach(cb => {
+                if(!cb.checked) {
+                    const pid = cb.dataset.pcsid;
+                    const pkt = cb.dataset.rawpkt;
+                    
+                    // SMART LOGIC: Only unlink if the packet was opened by another item
+                    if(pkt && openedPackets.has(pkt)) {
+                        returnIds.push(pid);
+                    }
+                    // Else: If packet wasn't opened, leave it alone (Packed Status stays)
+                }
+            });
+
+            try {
+                // 1. Handle Returns (Only from Broken Packets) -> Shop Floor, Unlink Pkt
+                for (const pid of returnIds) {
+                    await supabaseClient.from('inventory').update({
+                        status: 'Shop Floor',
+                        location: 'Shop',
+                        pkt_ids: [] // Empty packet array
+                    }).eq('pcs_id', pid);
+                }
+
+                // 2. Handle Deliveries -> Delivered, Loc Customer
+                if (deliverIds.length > 0) {
+                    await supabaseClient.from('inventory').update({
+                        status: 'DELIVERED',
+                        location: 'Customer'
+                    }).in('pcs_id', deliverIds);
+                }
+
+                // 3. Update Bill Financials & Status
+                const { data: allInv } = await supabaseClient.from('inventory').select('status').eq('bill_number', currentBill.bill_number);
+                const allDelivered = allInv.every(i => i.status === 'DELIVERED');
+                const newStatus = allDelivered ? 'DELIVERED' : 'PARTIAL';
+
+                // Payment Log
+                if(amount > 0) {
+                    await supabaseClient.from('bill_payments').insert([{
+                        bill_id: currentBill.id,
+                        amount: amount,
+                        payment_type: `${payMode} (Delivery)`
+                    }]);
+                }
+
+                // Bill Update
+                await supabaseClient.from('bills').update({
+                    received_amount: currentBill.received_amount + amount,
+                    status: newStatus
+                }).eq('id', currentBill.id);
+
+                alert("✅ SUCCESS! Inventory & Bill Updated.");
+                location.reload();
+
+            } catch (e) {
+                alert("Error: " + e.message);
+                btn.disabled = false; btn.innerText = "CONFIRM & DELIVER";
+            }
+        }
+
+        function startScanner() {
+            document.getElementById('qr-modal').style.display = 'flex';
+            html5QrCode = new Html5Qrcode("qr-reader");
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (txt) => {
+                stopScanner();
+                processQuery(txt);
+            });
+        }
+        function stopScanner() { if(html5QrCode) html5QrCode.stop().then(()=>document.getElementById('qr-modal').style.display='none'); }
+
+    </script>
+</body>
+</html>
+
